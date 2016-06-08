@@ -213,7 +213,7 @@ div.tocify {
 
 <h1 class="title toc-ignore">Effects of Capacity Enhancing Investments on Indonesia’s Fisheries</h1>
 <h4 class="author"><em>Produced by Ocean Analytics for EDF</em></h4>
-<h4 class="date"><em>June 6, 2016</em></h4>
+<h4 class="date"><em>June 8, 2016</em></h4>
 
 </div>
 
@@ -456,40 +456,40 @@ KobjPT2=function(F,p,B,c,beta,phi,g,K,delta,V,Bgrid)
   V1 = Vnew1
 }</code></pre>
 <p>Once the optimized policy has been determined, prepare for forward projections for the pre-intervention time period <em>J</em> (30 years in this exercise). Create empty vectors that will be used to store biomass, fishing mortality, harvest, and profit indicators for the first 30 years. Set the starting biomass to <em>B<sub>0</sub></em> and starting fishing mortality to <em>F<sub>0</sub></em>. The following setup is for the SQ HCR:</p>
-<pre class="r"><code>BBoa1=vector()
-FFoa1=vector()
-HHoa1=vector()
-Pioa1=vector()
+<pre class="r"><code>BBsq1=vector()
+FFsq1=vector()
+HHsq1=vector()
+Pisq1=vector()
 
-FFoa1[1] = F0
-BBoa1[1] = B0</code></pre>
+FFsq1[1] = F0
+BBsq1[1] = B0</code></pre>
 <p>Once the vectors are initialized and the starting conditions have been defined, begin the forward projections. For this exercise, the SQ HCR is used for the pre-intervention time period <em>J</em> (30). The following code projects annual harvest, profit, fishing mortality, and biomass indicators for <em>J</em> years using the SQ HCR.</p>
 <pre class="r"><code>### Forward sweep for pre-intervention time period
 for (tt in seq(1,J,1))
 {
-    HHoa1[tt] = FFoa1[tt]*BBoa1[tt]   # OA harvest = fishing mortality in time t * biomass in time t
-    Pioa1[tt] = p*HHoa1[tt] - c*FFoa1[tt]^beta  # profit = price * harvest - cost * f ^ beta
-    FFoa1[tt+1] = F0  # f in the next time step = f0
-    BBoa1[tt+1] = BBoa1[tt] + (phi+1)/phi*g*BBoa1[tt]*(1-(BBoa1[tt]/K)^phi) - HHoa1[tt] # biomass in next time step 
+    HHsq1[tt] = FFsq1[tt]*BBsq1[tt]   # SQ harvest = fishing mortality in time t * biomass in time t
+    Pisq1[tt] = p*HHsq1[tt] - c*FFsq1[tt]^beta  # profit = price * harvest - cost * f ^ beta
+    FFsq1[tt+1] = F0  # f in the next time step = f0
+    BBsq1[tt+1] = BBsq1[tt] + (phi+1)/phi*g*BBsq1[tt]*(1-(BBsq1[tt]/K)^phi) - HHsq1[tt] # biomass in next time step 
 }</code></pre>
 <p>The next three forward projects are for the post-intervention time period. The intervention occurs in year <em>J</em>, and is characterized by a price increase and a HCR, which is either SQ, <em>F<sub>MSY</sub></em>, or the economically optimal. Calculate the new price by multiplying <em>p</em> by <em>pfactor</em>. Create new vectors to store the post-intervention annual indicators. Start by creating vectors for the SQ HCR and setting the starting biomass and fishing mortality to equal the last values in the pre-intervention forward projections.</p>
-<pre class="r"><code>#Now do forward sweep under OA for JJ periods (post-intervention time period)
-BBoa2=vector()
-FFoa2=vector()
-HHoa2=vector()
-Pioa2=vector()
+<pre class="r"><code>#Now do forward sweep under SQ for JJ periods (post-intervention time period)
+BBsq2=vector()
+FFsq2=vector()
+HHsq2=vector()
+Pisq2=vector()
 
-FFoa2[1] = FFoa1[J]  # First F value for post-intervention time period = last F value for pre-intervention time period
-BBoa2[1] = BBoa1[J+1]  # First B value for post-intervention time period = last B value for pre-intervention time period (J+1)</code></pre>
+FFsq2[1] = FFsq1[J]  # First F value for post-intervention time period = last F value for pre-intervention time period
+BBsq2[1] = BBsq1[J+1]  # First B value for post-intervention time period = last B value for pre-intervention time period (J+1)</code></pre>
 <p>First, project forward using the SQ HCR in the post-intervention time period. For this forward projection, <span class="math inline">\(p=p*pfactor\)</span>.</p>
 <pre class="r"><code># Now change price
 pnew = p*pfactor  # new price after price increasing policy intervention</code></pre>
 <pre class="r"><code>for (tt in seq(1,JJ,1))
 {
-  HHoa2[tt] = FFoa2[tt]*BBoa2[tt]
-  Pioa2[tt] = pnew*HHoa2[tt] - c*FFoa2[tt]^beta
-  FFoa2[tt+1] = F0  
-  BBoa2[tt+1] = BBoa2[tt] + (phi+1)/phi*g*BBoa2[tt]*(1-(BBoa2[tt]/K)^phi) - HHoa2[tt]
+  HHsq2[tt] = FFsq2[tt]*BBsq2[tt]
+  Pisq2[tt] = pnew*HHsq2[tt] - c*FFsq2[tt]^beta
+  FFsq2[tt+1] = F0  
+  BBsq2[tt+1] = BBsq2[tt] + (phi+1)/phi*g*BBsq2[tt]*(1-(BBsq2[tt]/K)^phi) - HHsq2[tt]
 }</code></pre>
 <p>Repeat for the <em>F<sub>MSY</sub></em> HCR. <em>F</em> in each time step is equal to <em>F<sub>MSY</sub></em>.</p>
 <pre class="r"><code>#Now do forward sweep under FMSY for JJ periods (post-intervention time period)
@@ -498,7 +498,7 @@ FFfmsy=rep(Fmsy,JJ)
 HHfmsy=vector()
 Pifmsy=vector()
 
-BBfmsy[1] = BBoa1[J+1] # First b value for post-intervention time period = last b value for pre-intervention time period
+BBfmsy[1] = BBsq1[J+1] # First b value for post-intervention time period = last b value for pre-intervention time period
 
 for (tt in seq(1,JJ,1))
 {
@@ -513,7 +513,7 @@ FFopt=vector()
 HHopt=vector()
 Piopt=vector()
 
-BBopt[1] = BBoa1[J+1] # First B value for post-intervention time period = last B value for pre-intervention time period
+BBopt[1] = BBsq1[J+1] # First B value for post-intervention time period = last B value for pre-intervention time period
 
 for (tt in seq(1,JJ,1))
 {
@@ -524,21 +524,21 @@ for (tt in seq(1,JJ,1))
   BBopt[tt+1] = BBopt[tt] + (phi+1)/phi*g*BBopt[tt]*(1-(BBopt[tt]/K)^phi) - HHopt[tt] # biomass in next time step calculation
   Piopt[tt] = pnew*HHopt[tt] - c*FFopt[tt]^beta # profit calculation (uses intervention price)
 }</code></pre>
-<p>Now that all of the vectors have been filled, combine vectors. For example, combine the SQ biomass vector for the pre-intervention period (<code>BBoa1</code>) with the corresponding vector from the post-intervention period (<code>BBoa2</code>).</p>
+<p>Now that all of the vectors have been filled, combine vectors. For example, combine the SQ biomass vector for the pre-intervention period (<code>BBsq1</code>) with the corresponding vector from the post-intervention period (<code>BBsq2</code>).</p>
 <pre class="r"><code># SQ biomass vector
-Biomass_oa = BBoa1[1:J]              # Biomass from pre-intervetion time period under SQ 
-Biomass_oa[(J+1):(J+JJ)]=BBoa2[1:JJ]   # Attach biomass from post-intervention time period under SQ</code></pre>
+Biomass_sq = BBsq1[1:J]              # Biomass from pre-intervetion time period under SQ 
+Biomass_sq[(J+1):(J+JJ)]=BBsq2[1:JJ]   # Attach biomass from post-intervention time period under SQ</code></pre>
 <p>Now perform a sensitivity analysis on the discount rate.</p>
 <pre class="r"><code># Now do sensitivity analysis of NPV with discount rate for the loan
 disc_vec = seq(0,.25,length.out=100)
-PV_oa = vector()
+PV_sq = vector()
 PV_opt = vector()
 PV_fmsy = vector()
 for (i in seq(1,length(disc_vec),1))
 {
   print(i)
   disc = disc_vec[i]
-  PV_oa[i] = sum(Pioa2*(1/(1+disc)^seq(0,29,1)))
+  PV_sq[i] = sum(Pisq2*(1/(1+disc)^seq(0,29,1)))
   PV_opt[i] = sum(Piopt*(1/(1+disc)^seq(0,29,1)))
   PV_fmsy[i] = sum(Pifmsy*(1/(1+disc)^seq(0,29,1)))
 }</code></pre>
