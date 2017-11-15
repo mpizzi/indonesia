@@ -1,0 +1,591 @@
+---
+title: "Effects of Capacity Enhancing Investments on Indonesia's Fisheries"
+author: "Produced by Ocean Analytics for EDF"
+date: "August 16, 2016"
+output: 
+  html_document:
+   toc: true
+   toc_float: true
+---
+
+```{r, echo=FALSE,error=FALSE,message=FALSE}
+# load libraries and functions
+library(ggplot2) # Plot
+library(tidyr) 
+library(dplyr)
+
+####
+options(scipen=999)
+options(digits = 4)
+
+### Set working directory
+setwd("~/Dropbox/Tracey's EcoA Work/Technical Projects/Indonesia/R")
+
+### read in data
+indoParams <- read.csv('indoAggInputs_0629.csv',stringsAsFactors=FALSE)
+
+### Initial parameteres needed for markdown
+g = indoParams$g     # growth rate
+Fmsy = g
+F0 = indoParams$Fcurrent # Starting fishing mortality
+theta = .005      # open access adjustment speed
+J = 20  # number of periods to run SQ model (pre-intervention)
+JJ = 30 # number of periods to simulate after policy change (post-intervention)
+```
+
+
+# Introduction
+Market interventions in fisheries are generally implemented with the goal of improving economic outcomes in the sector by either lowering fishing costs or raising the price of products. Investments in both programs and infrastructure such as cool storage units and processing centers are approaches often suggested as means to increase prices. Indonesia will receive a 2-billion-dollar investment in its fishing sector, presumably to be spent on infrastructure and/or services aimed at either increasing price, decreasing cost, or both.
+
+Sumaila et al. (2010) categorizes these types of investments as ‘capacity enhancing,’ which lead to the development of fishing capacity and over exploitation of the natural resource. Generally, improved profits as a result of reduced costs or higher prices has the potential to create the incentive to harvest more. Without appropriate management in place, this could lead to long-term losses in the fishery.
+
+This project explores the implications of profit enhancing programs or infrastructure on future biomass, harvest, and profit under three management scenarios. The questions explored include:
+
+1.	How do increases in price affect profit, harvest, and biomass outcomes under SQ management?
+2.  How do increases in price affect profit, harvest, and biomass outcomes under open access?
+3.	How do increases in price affect profit, harvest, and biomass outcomes when implemented with improved management (economically optimized or *F~MSY~* harvest control rule)?
+4.	How does the discount rate affect outcomes? 
+
+# Methods
+
+### *Approach*
+A bioeconomic model is parameterized to Indonesia. The country’s fisheries are modeled as a single stock. Biomass, harvest, and profit are modeled over a 50-year time horizon divided into two time periods: pre-intervention and post-intervention. During the pre-intervention time period, fishing mortality *F* is set at open access. During the post-intervention period, the model includes a price increase in the fishing sector, and one of four harvest control rules: economically optimal, *F~MSY~*, status quo (SQ), or open access (OA). The model tracks annual biomass, harvest, and profit indicators for all explored scenarios.
+
+### *General Equations*
+This analysis uses a discrete Pella-Tomlinson model, a generalized version of the logistic growth model. The Pella-Tomlinson model is as follows **(Equation 1)**:
+$$B_{t+1}=B_{t}+\frac{\phi+1}{\phi}gB_{t}\left(1-\left(\frac{B_{t}}{K}\right)^\phi\right)-H_{t}$$
+
+where *B~t~* is the biomass in time step *t*, $\phi$ is the Pella-Tomlinson growth shape parameter, *g* is the Pella-Tomlinson growth parameter, *K* is the carrying capacity of the population, and *H~t~* is the harvest in time *t*. Harvest is determined by the following **(Equation 2)**:
+$$H_{t}=F_{t}B_{t}$$
+
+where *F~t~* is the fishing mortality in time *t*. The economic model is as follows **(Equation 3)**:
+$$\pi_{t}=pH_{t}-cF_{t}^\beta$$
+
+where $\pi_{t}$ is the profit in time step *t*, *p* is the ex-vessel price, *H~t~* is the harvest in time *t*, *c* is the variable fishing cost per unit of fishing mortality, *F~t~* is fishing mortality in time *t*, and $\beta$ is the non-linear fishing cost parameter. 
+
+### *Harvest Control Rules (HCRs)*
+We assume one harvest control rule during the pre-implementation time period (open access), and test four harvest control rules during the post-implementation time period (OA, SQ, *F~MSY~*, and economically optimal).
+
+#### Pre-intervention time period and Open Access
+During the pre-intervention time period, *F* starts at the current *F*, which is defined by the parameters. In this exercise, *F~0~* = `r F0`, or *F/F~MSY~* of `r F0/Fmsy`, which represents a scenario in which overfishing is occurring.
+
+Under the OA scenario, the fishing mortality adjusts in each time step according to the following equation **(Equation 4)**:
+$$F_{t+1}=F_{t} + \theta*(\pi_{t}/\pi_{MSY})$$
+
+where $F_{t+1}$ is the fishing mortality in the next time step, $F_{t}$ is the fishing mortality in the current time step, $\theta$ is the open access adjustment speed (which equals `r theta` in this exercise), $\pi_{t}$ is the profit in the current time step, and $\pi_{MSY}$ is the profit when harvesting *MSY*.
+
+Under the OA scenario, this HCR is used for all 50 years. 
+
+#### Other HCRs
+The SQ scenario is characterized by a constant fishing mortality equal to the fishing mortality experienced in the last year of the pre-intervention time period. In this exercise, *F~SQ~* = *F* in year `r J`.
+
+Under the *F~MSY~* scenario, *F~t~* is equal to *F~MSY~* during the post-intervention time period. *F~MSY~* is defined by the following equation **(Equation 6)**:
+$$F_{MSY}=g$$
+
+To determine *F* for any given biomass under the economically optimal scenario, the following term is dynamically optimized for a range of biomass levels to maximize the discounted future stream of payoffs. This determines a policy function where *F~t~* is a function of *B~t~*.
+$$max_{F}\sum_{t=1}^\inf\frac{\pi_{t}}{\left(1+\phi\right)^t}$$
+
+```{r echo = FALSE, results = "hide"}
+### Biological parameters
+g = indoParams$g     # growth rate
+phi = indoParams$phi  # shape parameter
+K = indoParams$k  # Carrying capacity
+
+### Economic parameters
+h = indoParams$hsum # harvest
+p = indoParams$p     # price
+beta = 1.30   # non-linear fishing cost parameter
+pfactor = 1.5 # price factor after J years (changes price with intervention)
+
+### Equations
+MSY = g*K/(phi+1)^(1/phi)               # maximum sustainable yield
+bbar = 0.3                                 # open access level of b
+fbar = (phi+1)/phi*(1-(bbar^phi)/(phi+1)) # open acces level of f
+cbar = p*fbar*bbar*MSY/((g*fbar)^beta)    # value of c that creates open access at bbar
+
+### Parameters based on equations/parameters above
+c = cbar                         # cost (equals cost that creates open access at bbar)
+Bmsy = K/(phi+1)^(1/phi)                  # biomass at MSY
+Fmsy = g                       # fishing mortality at MSY
+
+### Profit equation
+Pimsy =  p*MSY - c*Fmsy^beta   # profit when harvesting MSY
+
+### Parameters
+theta = .005      # open access adjustment speed
+dd = .08          # discount rate
+delta = 1/(1+dd)  # discount factor
+
+### Starting conditions
+B0 = indoParams$Bcurrent # Starting biomass
+F0 = indoParams$Fcurrent
+
+### Time periods
+Y = 30 # number of backward induction interations (used in optimization)
+J = 20  # number of periods to run SQ model (pre-intervention)
+JJ = 30 # number of periods to simulate after policy change (post-intervention)
+
+```
+
+### *Parameterization*
+Parameters were determined using the following method. Table 1 includes a description for each parameter.
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Parameter  Code    Type         Description                                  Method                                                                         Value
+----------- ------ -------------- ------------------------------------------- ------------------------------------------------------------------------------ --------------
+$\phi$      phi     Biological     Growth shape parameter                       Assumed                                                                        `r phi`
+
+*g*         g       Biological     Growth rate                                  Calculated with Upside data                                                    `r g`
+
+*K*         K       Biological     Carrying capacity                            Calculated with Upside data                                                    `r K`
+ 
+*B~0~*      B0      Biological     Initial biomass                              Calculated with Upside data                                                    `r B0`
+
+*F~0~*      F0      Biological     Initial fishing mortality                    Assumed                                                                        `r F0`
+
+*B~MSY~*    Bmsy    Biological     Biomass at MSY                               $\frac{K}{\left(\phi+1\right)^\frac{1}{\phi}}$                                 `r Bmsy`
+                                                     
+*F~MSY~*    Fmsy    Biological     Fishing mortality at MSY                     *g*                                                                            `r g`
+
+*MSY*       MSY     Biological     Maximum sustainable yield                    $\frac{gK}{\left(\phi+1\right)^\frac{1}{\phi}}$                                `r MSY`
+                                                       
+$\pi_{MSY}$ Pimsy  Economic       Profit when harvesting MSY                   $p*MSY-c*F_{MSY}^\beta$                                                       `r Pimsy`
+
+*h*         h       Economic       Initial harvest                              Calculated with Upside data                                                   `r h`
+
+*p*         p       Economic       Price/MT                                     Calculated with Upside data                                                    `r p`
+
+$\beta$     beta    Economic       Non-linear fishing cost parameter            Assumed                                                                        `r beta`
+
+$\bar{b}$   bbar    Biological     Biomass level at open access                 Assumed                                                                        `r bbar`
+                            
+$\bar{f}$   fbar    Biological     Fishing mortality level at open access       $\left(\frac{\phi+1}{\phi}\right)\left(1-\frac{\bar{b}^\phi}{\phi+1}\right)$   `r fbar`
+                                                    
+$\bar{c}$   cbar    Economic       Value of *c* that creates open access at     $\frac{p\bar{f}\bar{b}MSY}{\left(g\bar{f}\right)^\beta}$                       `r cbar`
+                                   $\bar{b}$   
+                                                        
+*c*         c       Economic       Cost multiplier                              $\bar{c}$                                                                      `r c`
+
+
+*pfactor*   pfactor Economic       Price multiplier for the post-intervention  Assumed                                                                        `r pfactor`
+                                   time horizon
+
+$\sigma$    dd      Economic       Discount rate                               Assumed                                                                        `r dd`
+
+$\delta$    delta   Economic       Discount factor                             $\frac{1}{\left(1+\sigma\right)}$                                              `r delta`
+
+*J*         J       Temporal       Number of pre-intervention years            Assumed                                                                         `r J`
+
+*JJ*        JJ      Temporal       Number of post-intervention years           Assumed                                                                        `r JJ`
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Table: Table 1: Descriptions for each parameter.
+
+When exploring the effects of different parameters, the following steps should be taken to keep parameters consistent with the Pella-Tomlinson method. Instructions detailing how parameters *K* and *g* are determined using this method can be found [here](http://rpubs.com/costello/184256).
+
+1. Define *K* and *g*
+2. Use *K* and *g* to calculate *B~MSY~*, *F~MSY~*, and *MSY*
+3. Use *p* and *g* to calculate $\bar{c}$ (*c*)
+
+# Code
+
+Once parameters are defined, prepare for the economic optimization code. Create a vector of biomass levels, a vector that will be filled during the optimization, an empty policy matrix with the number of columns equal to the number of years over which the optimization runs, *Y* (in this exercise, `r Y`), and another empty vector to be filled during the optimization. *Y* does not need to equal the number of years used in the future projections (*J*+*JJ*, which is `r J+JJ` in this exercise), because the policy curves converge in fewer than `r J+JJ` years.  
+
+```{r}
+### Prepare for optimization
+Bgrid = seq(0,K,length.out=300)  # vector of potential biomass levels, 0 to K
+V1 = rep(0,length(Bgrid))        # vector filled with zeros the length of Bgrid (filled during optimization)
+
+### Policy matrix
+Fstar1=matrix(NA,nrow=length(Bgrid),ncol=Y)  # Policy matrix, row # = length of Bgrid, column # equal to T
+Vnew1=vector()
+```
+
+
+Next define the optimization function. 
+```{r}
+### Optimization 
+KobjPT2=function(F,p,B,c,beta,phi,g,K,delta,V,Bgrid)
+{
+  #To be used in optimization..."negout" is minimized by choosing F
+  
+  Pi = p*F*B - c*F^beta
+  Bprime = B + (phi+1)/phi*g*B*(1-(B/K)^phi) - F*B
+  Vnext = spline(Bgrid,V,xout=Bprime,method="natural")
+  negout = -(Pi + delta*Vnext$y)
+  return(negout)
+}
+```
+
+
+Use the optimization function to find the economically optimal harvest policy. This optimization is performed using the initial *p* parameter, and maximizes total NPV.
+```{r, results="hide"}
+for (t in seq(Y,1,-1))
+{
+  print(t)
+  for (i in seq(1,length(Bgrid),1))
+  {
+    if(t==Y) guess=.3 else{guess=Ftmp1}
+    B = Bgrid[i]
+    
+    #This finds optimal policy function under initial price
+    Thing1 = optim(par=guess,fn=KobjPT2,gr=NULL,lower=0,upper=1,p=p,B=B,c=c,beta=beta,phi=phi,g=g,K=K,delta=delta,V=V1,Bgrid=Bgrid,method="L-BFGS-B")
+    Ftmp1 = Thing1$par
+    Valtmp1 = Thing1$value
+    Fstar1[i,t] = Ftmp1 #the optimal F for each Bin Bgrid in year t
+    Vnew1[i] = -Valtmp1
+  }
+  V1 = Vnew1
+}
+```
+
+
+Once the optimized policy has been determined, prepare for forward projections for the pre-intervention time period *J* (`r J` years in this exercise). Create empty vectors that will be used to store biomass, fishing mortality, harvest, and profit indicators for the first `r J` years. The following setup is for the OA HCR:
+```{r results = "hide"}
+BBoa1=vector()
+FFoa1=vector()
+HHoa1=vector()
+Pioa1=vector()
+```
+
+Next, calculate the first values of each vector:
+```{r results = "hide"}
+Profit_last = p*h - c*F0^beta
+FFoa1[1] = F0 + theta*(Profit_last/Pimsy)
+HHoa1[1] = FFoa1[1]*B0
+BBoa1[1] = B0 + ((phi+1)/phi)*g*B0*(1-(B0/K)^phi) - HHoa1[1]
+Pioa1[1] = p*HHoa1[1] - c*FFoa1[1]^beta
+```
+
+Once the vectors are initialized and the starting conditions have been defined, begin the forward projections. For this exercise, the OA HCR is used for the pre-intervention time period *J* (`r J`). The following code projects annual harvest, profit, fishing mortality, and biomass indicators for *J* years using the OA HCR.
+```{r results = "hide"}
+### Forward sweep for pre-intervention time period
+for (tt in seq(1,J-1,1))
+{
+    FFoa1[tt+1] = FFoa1[tt] + theta*(Pioa1[tt]/Pimsy)  # f in the next time step = f + theta*(profit in time t / profit at MSY)
+    HHoa1[tt+1] = FFoa1[tt+1]*BBoa1[tt]   # OA harvest = fishing mortality * biomass
+    BBoa1[tt+1] = BBoa1[tt] + (phi+1)/phi*g*BBoa1[tt]*(1-(BBoa1[tt]/K)^phi) - HHoa1[tt+1] # biomass in next time step 
+    Pioa1[tt+1] = p*HHoa1[tt+1] - c*FFoa1[tt+1]^beta  # profit = price * harvest - cost * f ^ beta 
+}
+```
+
+The next three forward projects are for the post-intervention time period. The intervention occurs in year *J*, and is characterized by a price increase and a HCR, which is either OA, SQ, *F~MSY~*, or the economically optimal. Calculate the new price by multiplying *p* by *pfactor*. Create new vectors to store the post-intervention annual indicators. Start by creating vectors for the SQ HCR and calculating the values of harvest, biomass, and profit for the first time step in the post-intervention time period. Notice how *F* for the SQ HCR is defined when setting up the vectors since it is constant.
+
+Calculate the new price for the post-intervention time period. Now $p=p*pfactor$.
+``` {r results = "hide"}
+# Now change price
+pnew = p*pfactor  # new price after price increasing policy intervention
+```
+
+Then complete the setup for the SQ scenario.
+```{r results = "hide"}
+# Now do forward sweep under SQ for JJ periods (post-intervention time period)
+BBsq2=vector()
+FFsq2=rep(FFoa1[J],JJ)
+HHsq2=vector()
+Pisq2=vector()
+
+# Calculate values for first time step in post-intervention time period (refers to last time period)
+HHsq2[1] = FFsq2[1]*BBoa1[J]
+BBsq2[1] = BBoa1[J] + (phi+1)/phi*g*BBoa1[J]*(1-(BBoa1[J]/K)^phi) - HHsq2[1]
+Pisq2[1] = pnew*HHsq2[1] - c*FFsq2[1]^beta
+```
+
+Next, complete forward projection for SQ scenario.
+```{r results = "hide"}
+for (tt in seq(1,JJ-1,1))
+{
+  HHsq2[tt+1] = FFsq2[tt+1]*BBsq2[tt]
+  BBsq2[tt+1] = BBsq2[tt] + (phi+1)/phi*g*BBsq2[tt]*(1-(BBsq2[tt]/K)^phi) - HHsq2[tt+1]
+  Pisq2[tt+1] = pnew*HHsq2[tt+1] - c*FFsq2[tt+1]^beta
+}
+```
+
+Repeat for the *F~MSY~* HCR. *F* in each time step is equal to *F~MSY~*.
+```{r results = "hide"}
+# Now do forward sweep under FMSY for JJ periods (post-intervention time period)
+BBfmsy=vector()
+FFfmsy=rep(Fmsy,JJ)
+HHfmsy=vector()
+Pifmsy=vector()
+
+# Calculate initital values
+HHfmsy[1] = Fmsy*BBoa1[J]
+BBfmsy[1] = BBoa1[J] + (phi+1)/phi*g*BBoa1[J]*(1-(BBoa1[J]/K)^phi) - HHfmsy[1]
+Pifmsy[1] = pnew*HHfmsy[1] - c*Fmsy^beta
+
+# Forward projections
+for (tt in seq(1,JJ-1,1))
+{
+  HHfmsy[tt+1] = FFfmsy[tt+1]*BBfmsy[tt] # harvest calculation
+  BBfmsy[tt+1] = BBfmsy[tt] + (phi+1)/phi*g*BBfmsy[tt]*(1-(BBfmsy[tt]/K)^phi) - HHfmsy[tt+1] # biomass in next time step calculation
+  Pifmsy[tt+1] = pnew*HHfmsy[tt+1] - c*FFfmsy[tt+1]^beta # profit calculation (uses intervention price)
+}
+```
+
+Repeat for the economically optimal HCR. *F* in each time period is determined by the biomass in time *t*. 
+```{r results = "hide"}
+#Now do forward sweep under optimized for JJ periods (post-intervention time period)
+BBopt=vector()
+FFopt=vector()
+HHopt=vector()
+Piopt=vector()
+
+BBopt[1] = BBoa1[J] # First B value for post-intervention time period = last B value for pre-intervention time period
+
+for (tt in seq(1,JJ,1))
+{
+  FstarY1 = Fstar1[ ,1] # first column of Fstar1 matrix (this is from where the appropriate F will be chosen)
+  FFtmp1= spline(Bgrid,FstarY1,xout=BBopt[tt],method="natural") # interpolates between Bgrid values, chooses the F that matches with current biomass (BBopt[tt])
+  FFopt[tt] = FFtmp1$y # F matches with current biomass (BBopt[tt])
+  HHopt[tt] = FFopt[tt]*BBopt[tt] # harvest calculation
+  BBopt[tt+1] = BBopt[tt] + (phi+1)/phi*g*BBopt[tt]*(1-(BBopt[tt]/K)^phi) - HHopt[tt] # biomass in next time step calculation
+  Piopt[tt] = pnew*HHopt[tt] - c*FFopt[tt]^beta # profit calculation (uses intervention price)
+}
+```
+
+Finally, repeat for OA rule.
+```{r results = "hide"}
+# Now do forward sweep under OA for JJ periods (post-intervention time period)
+BBoa2=vector()
+FFoa2=vector()
+HHoa2=vector()
+Pioa2=vector()
+
+# Define initital conditions
+FFoa2[1] = FFoa1[J] + theta*(Pioa1[J]/Pimsy)
+HHoa2[1] = FFoa2[1]*BBoa1[J]
+BBoa2[1] = BBoa1[J] + ((phi+1)/phi)*g*BBoa1[J]*(1-(BBoa1[J]/K)^phi) - HHoa2[1]
+Pioa2[1] = pnew*HHoa2[1] - c*FFoa2[1]^beta
+
+for (tt in seq(1,JJ-1,1))
+{
+  FFoa2[tt+1] = FFoa2[tt] + theta*(Pioa2[tt]/Pimsy)
+  HHoa2[tt+1] = FFoa2[tt+1]*BBoa2[tt]
+  BBoa2[tt+1] = BBoa2[tt] + ((phi+1)/phi)*g*BBoa2[tt]*(1-(BBoa2[tt]/K)^phi) - HHoa2[tt+1]
+  Pioa2[tt+1] = pnew*HHoa2[tt+1] - c*FFoa2[tt+1]^beta
+}
+```
+
+Now that all of the vectors have been filled, combine vectors. For example, combine the OA biomass vector for the pre-intervention period (`BBoa1`) with the corresponding vector from the post-intervention period (`BBoa2`).
+
+```{r results = "hide"}
+# OA biomass vector
+Biomass_oa = BBoa1[1:J]              # Biomass from pre-intervetion time period under OA 
+Biomass_oa[(J+1):(J+JJ)]=BBoa2[1:JJ]   # Attach biomass from post-intervention time period under OA
+```
+
+```{r echo = FALSE, results = "hide"}
+# SQ harvest vector
+Profit_sq = Pioa1              # Harvest from pre-intervention time period under open access
+Profit_sq[(J+1):(J+JJ)]=Pisq2  # Attach harvest from post-intervention time period under open access
+
+# OA profit vector
+Profit_oa = Pioa1               # Profit from pre-intervention time period under open access
+Profit_oa[(J+1):(J+JJ)]=Pioa2   # Attach profit from post-intervention time period under open access
+
+# Optimized profit vector
+Profit_opt = Pioa1               # Profit from pre-intervention time period under open access (same as previous)
+Profit_opt[(J+1):(J+JJ)] = Piopt # Attach profit from post-intervention time period under economically opt HCR
+
+# Fmsy profit vector
+Profit_fmsy = Pioa1               # Profit from pre-intervention time period under open access (same as previous)
+Profit_fmsy[(J+1):(J+JJ)] =Pifmsy # Attach profit from post-intervention time period under FMSY HCR
+
+# SQ harvest vector
+Harvest_sq = HHoa1              # Harvest from pre-intervention time period under open access
+Harvest_sq[(J+1):(J+JJ)]=HHsq2  # Attach harvest from post-intervention time period under open access
+
+# OA harvest vector
+Harvest_oa = HHoa1              # Harvest from pre-intervention time period under SQ 
+Harvest_oa[(J+1):(J+JJ)]=HHoa2  # Attach harvest from post-intervention time period under SQ
+
+# Optimized harvest vector
+Harvest_opt = HHoa1               # Harvest from pre-intervetion time period under open access (same as previous)
+Harvest_opt[(J+1):(J+JJ)] = HHopt # Attach harvest from post-intervention time period under economically opt HCR
+
+# FMSY harvest vector
+Harvest_fmsy = HHoa1                # Harvest from pre-intervetion time period under open access (same as previous)
+Harvest_fmsy[(J+1):(J+JJ)] = HHfmsy # Attach harvest from post-intervention time period under FMSY HCR
+
+# SQ biomass vector
+Biomass_sq = BBoa1[1:J]              # Biomass from pre-intervetion time period under open access
+Biomass_sq[(J+1):(J+JJ)]=BBsq2[1:JJ]   # Attach biomass from post-intervention time period under open access
+
+# OA biomass vector
+Biomass_oa = BBoa1[1:J]              # Biomass from pre-intervetion time period under SQ 
+Biomass_oa[(J+1):(J+JJ)]=BBoa2[1:JJ]   # Attach biomass from post-intervention time period under SQ
+
+# Optimized biomass vector
+Biomass_opt = BBoa1[1:J]                # Biomass from pre-intervetion time period under open access (same as previous)
+Biomass_opt[(J+1):(J+JJ)] = BBopt[2:(JJ+1)] # Attach biomass from post-intervention time period under economically opt HCR
+
+# FMSY biomass vector
+Biomass_fmsy = BBoa1[1:J]                 # Biomass from pre-intervetion time period under open access (same as previous)
+Biomass_fmsy[(J+1):(J+JJ)] = BBfmsy[1:JJ] # Attach biomass from post-intervention time period under FMSY HCR
+
+```
+
+Now perform a sensitivity analysis on the discount rate.
+```{r results = "hide"}
+# Now do sensitivity analysis of NPV with discount rate for the loan
+disc_vec = seq(0,.25,length.out=100)
+PV_oa = vector()
+PV_sq = vector()
+PV_opt = vector()
+PV_fmsy = vector()
+for (i in seq(1,length(disc_vec),1))
+{
+  print(i)
+  disc = disc_vec[i]
+  PV_oa[i] = sum(Pioa2*(1/(1+disc)^seq(0,29,1)))
+  PV_sq[i] = sum(Pisq2*(1/(1+disc)^seq(0,29,1)))
+  PV_opt[i] = sum(Piopt*(1/(1+disc)^seq(0,29,1)))
+  PV_fmsy[i] = sum(Pifmsy*(1/(1+disc)^seq(0,29,1)))
+}
+```
+
+
+# Visualize Results
+
+```{r echo = FALSE}
+
+time <- seq(1,J+JJ,1)
+
+bdata <- cbind(time, Biomass_opt, Biomass_fmsy, Biomass_oa, Biomass_sq)
+bdata <- as.data.frame(bdata)
+bdata <- bdata %>%
+  gather(HCR,Biomass,Biomass_opt:Biomass_sq)
+  
+hdata <- cbind(time, Harvest_opt, Harvest_fmsy, Harvest_oa, Harvest_sq)
+hdata <- as.data.frame(hdata)
+hdata <- hdata %>%
+  gather(HCR,Harvest,Harvest_opt:Harvest_sq)
+
+pdata <- cbind(time, Profit_opt, Profit_fmsy, Profit_oa, Profit_sq)
+pdata <- as.data.frame(pdata)
+pdata <- pdata %>%
+  gather(HCR,Profit,Profit_opt:Profit_sq)
+
+discountdf <- cbind(disc_vec, PV_opt, PV_fmsy, PV_oa, PV_sq)
+discountdf <- as.data.frame(discountdf)
+discountdf <- discountdf %>%
+  gather(HCR,Profit,PV_opt:PV_sq)
+
+
+policydf <- cbind(Bgrid,Fstar1[,1])
+policydf <- as.data.frame(policydf)
+policydf <- policydf %>%
+  rename(Fstar = V2) %>%
+  mutate(Fmsy = Fmsy,
+          SQ = FFsq2[1]) %>%
+  gather(HCR,Fvalue,Fstar:SQ)
+```
+
+```{r echo = FALSE}
+ggplot(policydf, aes(x = Bgrid/1000000, y = Fvalue, color=HCR)) +
+  geom_line() +
+  scale_color_manual(values = c("Fstar" = "blue", "Fmsy" = "green", "SQ" = "black"),
+                     name = "HCR",
+                     breaks = c("Fstar", "Fmsy", "SQ"),
+                     labels = c("Economically Optimal", "FMSY", "Status Quo")) +
+  xlab('Biomass (Million MT)') +
+  ylab('F') +
+  ggtitle('Harvest Policies') +
+  theme_bw() +
+  theme(plot.title=element_text(size = 18),
+        axis.title.y = element_text(size = 16),
+        axis.title.x = element_text(size = 16),
+        legend.position = "bottom")
+```
+
+
+```{r echo = FALSE}
+ggplot(bdata, aes(x = time, y = Biomass/1000000, color = HCR)) +
+  geom_line() +
+  scale_color_manual(values = c("Biomass_opt" = "blue", "Biomass_fmsy" = "green", "Biomass_sq" = "black", "Biomass_oa" = "red"),
+                     name = "HCR",
+                     breaks = c("Biomass_opt", "Biomass_fmsy", "Biomass_sq", "Biomass_oa"),
+                     labels = c("Economically Optimal", "FMSY", "SQ", "OA")) +
+  geom_point(x = time[20], y = Biomass_sq[20]/1000000, color = "black", size = 2) +
+  xlab('Time') +
+  ylab('Biomass (Million MT)') +
+  ggtitle('Biomass (MMT) Over Time: Four HCRs') +
+  theme_bw() +
+  theme(plot.title=element_text(size = 18),
+        axis.title.y = element_text(size = 16),
+        axis.title.x = element_text(size = 16),
+        legend.position = "bottom")
+```
+
+``` {r echo = FALSE}
+### Harvest plot
+ggplot(hdata, aes(x = time, y = Harvest/1000, color = HCR)) +
+  geom_line() +
+  scale_color_manual(values = c("Harvest_opt" = "blue", "Harvest_fmsy" = "green", "Harvest_sq" = "black", "Harvest_oa" = "red"),
+                     name = "HCR",
+                     breaks = c("Harvest_opt", "Harvest_fmsy", "Harvest_sq", "Harvest_oa"),
+                     labels = c("Economically Optimal", "FMSY", "SQ", "OA")) +
+  geom_point(x = time[20], y = Harvest_sq[20]/1000, color = "black", size = 2) +
+  xlab('Time') +
+  ylab('Harvest (Thousand MT)') +
+  ggtitle('Harvest (TMT) Over Time: Four HCRs') +
+  theme_bw() +
+  theme(plot.title=element_text(size = 18),
+        axis.title.y = element_text(size = 16),
+        axis.title.x = element_text(size = 16),
+        legend.position = "bottom")
+```
+
+```{r echo = FALSE}
+ggplot(pdata, aes(x = time, y = Profit/1000000, color = HCR)) +
+  geom_line() +
+  scale_color_manual(values = c("Profit_opt" = "blue", "Profit_fmsy" = "green", "Profit_sq" = "black", "Profit_oa" = "red"),
+                     name = "HCR",
+                     breaks = c("Profit_opt", "Profit_fmsy", "Profit_sq", "Profit_oa"),
+                     labels = c("Economically Optimal", "FMSY", "SQ", "OA")) +
+  geom_point(x = time[20], y = Profit_sq[20]/1000000, color = "black", size = 2) +
+  xlab('Time') +
+  ylab('Profit (Million USD)') +
+  ggtitle('Profit (Million USD) Over Time: Four HCRs') +
+  theme_bw() +
+  theme(plot.title=element_text(size = 18),
+        axis.title.y = element_text(size = 16),
+        axis.title.x = element_text(size = 16),
+        legend.position = "bottom")
+```
+
+```{r echo = FALSE}
+ggplot(discountdf, aes(x = disc_vec, y = Profit/1000000, color = HCR)) +
+  geom_line() +
+  scale_color_manual(values = c("PV_opt" = "blue", "PV_fmsy" = "green", "PV_oa" = "red", "PV_sq" = "black"),
+                     name = "HCR",
+                     breaks = c("PV_opt", "PV_fmsy", "PV_oa", "PV_sq"),
+                     labels = c("Economically Optimal", "FMSY", "OA", "SQ")) +
+  scale_linetype_manual(values = c("line","line", "dashed", "line")) +
+  xlab('Discount Rate') +
+  ylab('Profit (Million USD)') +
+  ggtitle('Sensitivity Analysis: Discount Rate') +
+  theme_bw() +
+  theme(plot.title=element_text(size = 18),
+        axis.title.y = element_text(size = 16),
+        axis.title.x = element_text(size = 16),
+        legend.position = "bottom")
+```
+
+# Results and Discussion
+
+The results indicate that although annual profits are initially higher after the price intervention under the OA and SQ HCRs compared to the economically optimal and *F~MSY~* HCRs, the profits under the OA and SQ HCRs are not sustained over time. In less than 10 years after the price increase is implemented, the economically optimal and *F~MSY~* HCRs result in higher annual profits than those under the alternative HCRs.
+
+Annual biomass indicators start increasing immediately when either the economically optimal or *F~MSY~* HCRs are implemented. Although annual harvest initially drops with their implementation, over time annual harvests under these two HCRs surpass harvest under the OA or SQ HCRs.
+
+The results suggest that without additional management interventions, a capacity enhancing investment that leads to a price increase can lead to overall lower biomass, harvest, and profit indicators. 
+
+# Future Studies
+
+This study can be built upon in a number of ways. A future study could explore the implications of different starting stock conditions and SQ harvest scenarios. For this study, we tested a *B/B~MSY~* of `r B0/Bmsy` and a SQ harvest rate of *F/F~MSY~* of `r F0/Fmsy`. One could test a number of different HCRs, including an open access policy that responds to the profit in each time step.
+
+# References
+
+Sumaila, U.R., Khan, A.S., Dyck, A.J., Watson, R., Munro, G., Tydemers, P. and Pauly, D., 2010. A bottom-up re-estimation of global fisheries subsidies. Journal of Bioeconomics, 12(3), pp.201-225.
