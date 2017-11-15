@@ -19,7 +19,7 @@ options(scipen=999)
 options(digits = 4)
 
 ### Set working directory
-setwd("~/Dropbox/Tracey's EcoA Work/Technical Projects/Indonesia/R")
+# setwd("~/Dropbox/Tracey's EcoA Work/Technical Projects/Indonesia/R")
 
 ### read in data
 indoParams <- read.csv('indoAggInputs_0629.csv',stringsAsFactors=FALSE)
